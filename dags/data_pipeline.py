@@ -46,6 +46,7 @@ s3_sensor = S3KeySensor(
   bucket_name=S3_BUCKET_NAME,  
   bucket_key='data/raw/green*', 
   wildcard_match=True, 
+  deferrable=True,
   dag=dag  
 )
 
@@ -128,3 +129,17 @@ delete_app = EmrServerlessDeleteApplicationOperator(
     application_id="{{ task_instance.xcom_pull('create_emr_serverless_app', key='return_value') }}",
     dag=dag
 )
+
+copy_to_redshift = S3ToRedshiftOperator(
+    task_id='copy_to_redshift',
+    schema='nyc',
+    table='green',
+    s3_bucket=S3_BUCKET_NAME,
+    s3_key='data/aggregated',
+    copy_options=["FORMAT AS PARQUET"],
+    redshift_conn_id='redshift-conn-id',
+    dag=dag
+)
+
+
+s3_sensor >> glue_crawler >> glue_job >> create_emr_serverless_app >> emr_serverless_job >> emr_serverless_job_sensor >> delete_app >> copy_to_redshift
